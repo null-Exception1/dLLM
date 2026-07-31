@@ -15,18 +15,16 @@ message ActivationPayload {
     uint32 task_serial_number    = 2; // Fixed serial (0-4) mapped to our speculative branches
     uint32 layer_index           = 3; // The exact downstream layer target (e.g., Layer 8)
     
-    // Low-Level Block-Wise Quantization Parameters
     float global_min             = 4; // Min value from float32 scan
     float global_max             = 5; // Max value from float32 scan
     float scale_factor           = 6; // Dynamic scale multiplier
     
-    // The Compressed Data Fields
     bytes quantized_tensor       = 7; // Packed INT8 bytes of our 35% outlier peaks
     bytes sparse_bitmask         = 8; // Compressed binary mask (8 boolean flags packed per byte)
 }
 
-// Fast confirmation packet to minimize network blocking/latency
 message StreamAck {
     bool success                 = 1;
     string error_message         = 2;
+    string generated_token       = 3; // FIX: The network pipeline return lane for text delivery
 }

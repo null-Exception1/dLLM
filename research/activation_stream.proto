@@ -1,0 +1,21 @@
+
+    syntax = "proto3";
+    package dllm.network;
+    message ActivationPayload {
+        uint64 prompt_hash = 1;
+        uint32 task_serial_number = 2;
+        uint32 layer_index = 3;
+        float global_min = 4;
+        float global_max = 5;
+        float scale_factor = 6;
+        bytes quantized_tensor = 7;
+        bytes sparse_bitmask = 8;
+    }
+    message StreamAck {
+        bool success = 1;
+        string error_message = 2;
+    }
+    service ActivationStream {
+        rpc StreamLayerActivations (ActivationPayload) returns (StreamAck);
+    }
+    

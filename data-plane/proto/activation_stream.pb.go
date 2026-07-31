@@ -124,13 +124,13 @@ func (x *ActivationPayload) GetSparseBitmask() []byte {
 	return nil
 }
 
-// Fast confirmation packet to minimize network blocking/latency
 type StreamAck struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage   string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	GeneratedToken string                 `protobuf:"bytes,3,opt,name=generated_token,json=generatedToken,proto3" json:"generated_token,omitempty"` // FIX: The network pipeline return lane for text delivery
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *StreamAck) Reset() {
@@ -177,6 +177,13 @@ func (x *StreamAck) GetErrorMessage() string {
 	return ""
 }
 
+func (x *StreamAck) GetGeneratedToken() string {
+	if x != nil {
+		return x.GeneratedToken
+	}
+	return ""
+}
+
 var File_data_plane_proto_activation_stream_proto protoreflect.FileDescriptor
 
 const file_data_plane_proto_activation_stream_proto_rawDesc = "" +
@@ -194,10 +201,11 @@ const file_data_plane_proto_activation_stream_proto_rawDesc = "" +
 	"global_max\x18\x05 \x01(\x02R\tglobalMax\x12!\n" +
 	"\fscale_factor\x18\x06 \x01(\x02R\vscaleFactor\x12)\n" +
 	"\x10quantized_tensor\x18\a \x01(\fR\x0fquantizedTensor\x12%\n" +
-	"\x0esparse_bitmask\x18\b \x01(\fR\rsparseBitmask\"J\n" +
+	"\x0esparse_bitmask\x18\b \x01(\fR\rsparseBitmask\"s\n" +
 	"\tStreamAck\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage2f\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12'\n" +
+	"\x0fgenerated_token\x18\x03 \x01(\tR\x0egeneratedToken2f\n" +
 	"\x10ActivationStream\x12R\n" +
 	"\x16StreamLayerActivations\x12\x1f.dllm.network.ActivationPayload\x1a\x17.dllm.network.StreamAckB\x1fZ\x1ddllm-cluster/data-plane/protob\x06proto3"
 

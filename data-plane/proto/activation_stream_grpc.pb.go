@@ -25,8 +25,6 @@ const (
 // ActivationStreamClient is the client API for ActivationStream service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// The ActivationStream service handles high-throughput, cross-shard tensor transfers
 type ActivationStreamClient interface {
 	StreamLayerActivations(ctx context.Context, in *ActivationPayload, opts ...grpc.CallOption) (*StreamAck, error)
 }
@@ -52,8 +50,6 @@ func (c *activationStreamClient) StreamLayerActivations(ctx context.Context, in 
 // ActivationStreamServer is the server API for ActivationStream service.
 // All implementations must embed UnimplementedActivationStreamServer
 // for forward compatibility.
-//
-// The ActivationStream service handles high-throughput, cross-shard tensor transfers
 type ActivationStreamServer interface {
 	StreamLayerActivations(context.Context, *ActivationPayload) (*StreamAck, error)
 	mustEmbedUnimplementedActivationStreamServer()

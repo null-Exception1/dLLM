@@ -1,57 +1,80 @@
 import grpc
 import time
 import numpy as np
+import torch
 import sys
 import os
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
-# Ensure Python can see your compiled protobuf drivers inside the research directory
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+import activation_stream_pb2 as pb2
+import activation_stream_pb2_grpc as pb2_grpc
 
-try:
-    import activation_stream_pb2 as pb2
-    import activation_stream_pb2_grpc as pb2_grpc
-except ImportError:
-    print("❌ Error: Missing compiled proto files. Run your protoc command from the repository root first!")
-    sys.exit(1)
-
-def run_injection_test():
-    print("🛰️ Connecting local client injector to Go Entry Shard at localhost:50051...")
+def run_real_token_onramp():
+    print("🛰️ Connecting client injector to Go Entry Shard at localhost:50051...")
     channel = grpc.insecure_channel("localhost:50051")
     client = pb2_grpc.ActivationStreamStub(channel)
 
-    # Simulating sequential layers (6 through 11) to watch the Go Hash Ring deflect targets
-    for layer in range(6, 12):
-        print(f"\n🎬 Generating synthetic layer activations for Target Layer {layer}...")
+    model_id = "meta-llama/Llama-3.2-3B-Instruct"
+    print(f"📦 Loading local tokenizer and context on-ramp embeddings for {model_id}...")
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    
+    # Load model weights in ultra-low memory mode just to use layers 0-5 locally
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_quant_type="nf4"
+    )
+    model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=bnb_config, device_map="auto")
+
+    # =========================================================
+    # PRODUCTION INPUT: THE REAL REASONING SENTENCE
+    # =========================================================
+    prompt = "what are your thoughts on modern feminism?"
+    print(f"\n📝 Processing Input Sentence: '{prompt}'")
+    
+    messages = [{"role": "user", "content": prompt}]
+    inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt").to("cuda")
+
+    # 1. STEP ONE: Run the local on-ramp layers (0 through 5) to generate true context
+    print("🎬 Computing local on-ramp context matrices (Layers 0 -> 5)...")
+    with torch.no_grad():
+        # Pass raw input IDs through the embedding projection layer
+        hidden_states = model.model.embed_tokens(inputs)
         
-        # Simulating a 35% sliced Float16 token vector (1,075 non-zero elements -> ~2,150 bytes)
-        # FIX: Change from 1075 to 3072 so the matrix dimensions match Llama's brain exactly
-        mock_floats = np.random.randn(3072).astype(np.float16)
-        raw_tensor_bytes = mock_floats.tobytes()
+        # Manually run the first 6 layers locally to establish the linguistic trajectory foundation
+        position_ids = torch.arange(0, hidden_states.shape[1], dtype=torch.long, device="cuda").unsqueeze(0)
+        for i in range(0, 6):
+            layer_outputs = model.model.layers[i](hidden_states, position_ids=position_ids)
+            hidden_states = layer_outputs[0] if isinstance(layer_outputs, tuple) else layer_outputs
 
-        # Squeezing a dense 384-byte bitmask layer matching Llama's 3,072-channel dimension bounds
-        mock_bitmask = bytes([0b10101010] * 384)
+    # 2. STEP TWO: Extract the real, high-precision Float16 vector bytes
+    print(f"⚡ Extracted True Linguistic Matrix! Shape: {list(hidden_states.shape)} | Channels: {hidden_states.shape[-1]}")
+    real_tensor_bytes = hidden_states.detach().cpu().to(torch.float16).numpy().tobytes()
+    mock_bitmask = bytes([0xFF] * 384) # 3,072 channels bounded
 
-        # Constructing the structural payload matching your compiled Go data contracts
-        payload = pb2.ActivationPayload(
-            prompt_hash=99999,       # Fixed prompt identifier key to test ring routing stability
-            task_serial_number=2,    # Simulating Speculative Branch Trajectory #2
-            layer_index=layer,
-            global_min=-1.0,
-            global_max=1.0,
-            scale_factor=1.0,
-            quantized_tensor=raw_tensor_bytes,
-            sparse_bitmask=mock_bitmask
-        )
+    # 3. STEP THREE: Blast the true semantic state directly into the Go data plane!
+    payload = pb2.ActivationPayload(
+        prompt_hash=77777,
+        task_serial_number=1, # Branch Trajectory 1
+        layer_index=6,        # Targeting Shard entry at Layer 6 gateway!
+        quantized_tensor=real_tensor_bytes,
+        sparse_bitmask=mock_bitmask,
+        token_ids=inputs[0].cpu().numpy().tolist(),
+        cumulative_logprob=-1.2
+    )
 
-        try:
-            print(f"🚀 Blasting network packet for Layer {layer} into port :50051...")
-            response = client.StreamLayerActivations(payload)
-            if response.success:
-                print(f"✅ Packet for Layer {layer} accepted smoothly by the cluster data plane.")
-        except Exception as e:
-            print(f"❌ Transport Drop on Layer {layer}: {e}")
-            
-        time.sleep(1.2) # Adding a tiny breathing gap so you can watch logs flash cross your tabs!
+    try:
+        print("🚀 Blasting genuine linguistic tensor matrix into Go Port :50051...")
+        response = client.StreamLayerActivations(payload)
+        if response.success:
+            print("\n" + "="*60)
+            print("🎉 SUCCESS! Cluster processed real text matrix!")
+            if response.generated_token:
+                print(f"👉 Returned Word from Mesh: '{response.generated_token}'")
+            print("="*60)
+    except Exception as e:
+        print(f"❌ Cluster Transport Drop: {e}")
 
 if __name__ == "__main__":
-    run_injection_test()
+    run_real_token_onramp()

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -17,8 +19,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-const colabCoprocessorAddr = "edzik-34-124-254-109.run.pinggy-free.link:35913"
 
 type DataPlaneServer struct {
 	pb.UnimplementedActivationStreamServer
@@ -40,12 +40,11 @@ func (s *DataPlaneServer) getPeerClient(targetPort string) (pb.ActivationStreamC
 
 	s.poolMutex.Lock()
 	defer s.poolMutex.Unlock()
-
 	if client, exists := s.peerPool[targetPort]; exists {
 		return client, nil
 	}
 
-	targetAddr := "localhost:" + targetPort
+	targetAddr := "127.0.0.1:" + targetPort
 	conn, err := grpc.Dial(targetAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func (s *DataPlaneServer) StreamLayerActivations(ctx context.Context, req *pb.Ac
 	targetNodePort := s.Ring.GetNode(promptHash, layerIndex, taskSerial)
 
 	if targetNodePort == s.CurrentPort {
-		log.Printf("[Mesh Node :%s] 🎯 LOCAL COORDINATE HIT -> Layer: %d. Proxying to shared Colab GPU...", s.CurrentPort, layerIndex)
+		log.Printf("[Mesh Node :%s] 🎯 COORDINATE HIT -> Processing Layer: %d", s.CurrentPort, layerIndex)
 
 		req.TaskSerialNumber = uint32(intCastPort(s.CurrentPort))
 
@@ -73,36 +72,34 @@ func (s *DataPlaneServer) StreamLayerActivations(ctx context.Context, req *pb.Ac
 
 		resp, err := s.colabClient.StreamLayerActivations(ctxTimeout, req)
 		if err != nil {
-			return nil, err
+			log.Printf("❌ Cloud Link Drop on Layer %d: %v", layerIndex, err)
+			return &pb.StreamAck{Success: false, ErrorMessage: err.Error()}, nil
 		}
 
-		if resp.GeneratedToken != "" {
-			log.Printf("🎉 [RESULT NODE MATCH] Mesh Node :%s successfully intercepted decoded token text from cloud: \"%s\"",
-				s.CurrentPort, resp.GeneratedToken)
+		if layerIndex == 27 {
+			log.Printf("🏆 [TERMINAL GATEWAY REACHED] Discovered Token Text: \"%s\"", resp.GeneratedToken)
+			return resp, nil
 		}
 
-		return resp, nil
+		// AUTONOMOUS LAYER AUTO-ADVANCE PIPELINE
+		req.LayerIndex = layerIndex + 1
+		log.Printf("[Mesh Node :%s] 🏎️ AUTO-ADVANCE -> Layer %d complete. Chaining forward to Layer %d...", s.CurrentPort, layerIndex, req.LayerIndex)
+
+		nextTargetPort := s.Ring.GetNode(promptHash, req.LayerIndex, taskSerial)
+		nextPeerClient, err := s.getPeerClient(nextTargetPort)
+		if err != nil {
+			return &pb.StreamAck{Success: false, ErrorMessage: err.Error()}, nil
+		}
+
+		return nextPeerClient.StreamLayerActivations(ctx, req)
 	}
 
-	log.Printf("[Mesh Node :%s] 🔀 RING TOPOLOGY SHIFT -> Layer: %d maps clockwise to node :%s. Forwarding...",
-		s.CurrentPort, layerIndex, targetNodePort)
-
+	log.Printf("[Mesh Node :%s] 🔀 RING TOPOLOGY SHIFT -> Layer: %d maps clockwise to port :%s. Forwarding...", s.CurrentPort, layerIndex, targetNodePort)
 	peerClient, err := s.getPeerClient(targetNodePort)
 	if err != nil {
 		return &pb.StreamAck{Success: false, ErrorMessage: err.Error()}, nil
 	}
-
-	resp, err := peerClient.StreamLayerActivations(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.GeneratedToken != "" && s.CurrentPort == "50051" {
-		log.Printf("🎉 [MESH INTERCEPT] Entry Shard :%s intercepted returned token path: \"%s\"",
-			s.CurrentPort, resp.GeneratedToken)
-	}
-
-	return resp, nil
+	return peerClient.StreamLayerActivations(ctx, req)
 }
 
 func intCastPort(p string) int {
@@ -115,19 +112,37 @@ func intCastPort(p string) int {
 	return 3
 }
 
+func readEnvAddress(filePath string) string {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("❌ Config Error: %v", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 && parts[0] == "COLAB_COPROCESSOR_ADDR" {
+			return strings.Trim(parts[1], "\"")
+		}
+	}
+	return ""
+}
+
 func main() {
 	portFlag := flag.String("port", "50051", "The data-plane port for this node")
 	flag.Parse()
 
-	log.Printf("🛰️ Dialing cleartext TCP socket via Pinggy out to: %s", colabCoprocessorAddr)
+	colabCoprocessorAddr := readEnvAddress(".env")
+	log.Printf("🛰️ [Config Hot-Reload] Loaded active remote gateway address: %s", colabCoprocessorAddr)
 
-	conn, err := grpc.NewClient(colabCoprocessorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(colabCoprocessorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("❌ Fatal: Failed to open transport pipeline to Colab coprocessor: %v", err)
+		log.Fatalf("❌ Fatal: %v", err)
 	}
-	defer conn.Close()
-
-	log.Println("🎉 Success! Connected cleanly to the centralized Colab GPU coprocessor.")
 
 	clusterRing := ring.NewHashRing(256)
 	clusterRing.AddNode("50051")
@@ -137,7 +152,7 @@ func main() {
 	port := ":" + *portFlag
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("❌ Fatal: Failed to bind TCP socket: %v", err)
+		log.Fatalf("❌ Fatal: %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -150,18 +165,11 @@ func main() {
 	}
 
 	pb.RegisterActivationStreamServer(grpcServer, serverInstance)
-
-	go func() {
-		log.Printf("🚀 dLLM Data-Plane Shard Node is listening on port %s...", port)
-		if err := grpcServer.Serve(listener); err != nil {
-			log.Fatalf("❌ Fatal: Server crashed: %v", err)
-		}
-	}()
+	go func() { _ = grpcServer.Serve(listener) }()
 
 	stopSignal := make(chan os.Signal, 1)
 	signal.Notify(stopSignal, os.Interrupt, syscall.SIGTERM)
 	<-stopSignal
-
-	log.Printf("\n🧼 Clean Shutdown: Stopping Shard Node :%s...", *portFlag)
+	conn.Close()
 	grpcServer.GracefulStop()
 }

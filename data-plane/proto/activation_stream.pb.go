@@ -21,21 +21,18 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Optimized network payload for the 35% compressed tensor data
 type ActivationPayload struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	PromptHash       uint64                 `protobuf:"varint,1,opt,name=prompt_hash,json=promptHash,proto3" json:"prompt_hash,omitempty"`                     // Unique conversation identifier (Macro-route mapping)
-	TaskSerialNumber uint32                 `protobuf:"varint,2,opt,name=task_serial_number,json=taskSerialNumber,proto3" json:"task_serial_number,omitempty"` // Fixed serial (0-4) mapped to our speculative branches
-	LayerIndex       uint32                 `protobuf:"varint,3,opt,name=layer_index,json=layerIndex,proto3" json:"layer_index,omitempty"`                     // The exact downstream layer target (e.g., Layer 8)
-	// Low-Level Block-Wise Quantization Parameters
-	GlobalMin   float32 `protobuf:"fixed32,4,opt,name=global_min,json=globalMin,proto3" json:"global_min,omitempty"`       // Min value from float32 scan
-	GlobalMax   float32 `protobuf:"fixed32,5,opt,name=global_max,json=globalMax,proto3" json:"global_max,omitempty"`       // Max value from float32 scan
-	ScaleFactor float32 `protobuf:"fixed32,6,opt,name=scale_factor,json=scaleFactor,proto3" json:"scale_factor,omitempty"` // Dynamic scale multiplier
-	// The Compressed Data Fields
-	QuantizedTensor []byte `protobuf:"bytes,7,opt,name=quantized_tensor,json=quantizedTensor,proto3" json:"quantized_tensor,omitempty"` // Packed INT8 bytes of our 35% outlier peaks
-	SparseBitmask   []byte `protobuf:"bytes,8,opt,name=sparse_bitmask,json=sparseBitmask,proto3" json:"sparse_bitmask,omitempty"`       // Compressed binary mask (8 boolean flags packed per byte)
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PromptHash        uint64                 `protobuf:"varint,1,opt,name=prompt_hash,json=promptHash,proto3" json:"prompt_hash,omitempty"`
+	TaskSerialNumber  uint32                 `protobuf:"varint,2,opt,name=task_serial_number,json=taskSerialNumber,proto3" json:"task_serial_number,omitempty"`   // Speculative Branch trajectory ID
+	LayerIndex        uint32                 `protobuf:"varint,3,opt,name=layer_index,json=layerIndex,proto3" json:"layer_index,omitempty"`                       // Dynamic layer hop tracker
+	QuantizedTensor   []byte                 `protobuf:"bytes,4,opt,name=quantized_tensor,json=quantizedTensor,proto3" json:"quantized_tensor,omitempty"`         // Main hidden state activation matrix
+	SparseBitmask     []byte                 `protobuf:"bytes,5,opt,name=sparse_bitmask,json=sparseBitmask,proto3" json:"sparse_bitmask,omitempty"`               // Task 2.4 outlier compression bits
+	TokenIds          []int64                `protobuf:"varint,6,rep,packed,name=token_ids,json=tokenIds,proto3" json:"token_ids,omitempty"`                      // Active token sequence history string
+	CumulativeLogprob float32                `protobuf:"fixed32,7,opt,name=cumulative_logprob,json=cumulativeLogprob,proto3" json:"cumulative_logprob,omitempty"` // Running probability track score
+	PositionIds       []int64                `protobuf:"varint,8,rep,packed,name=position_ids,json=positionIds,proto3" json:"position_ids,omitempty"`             // Explicit structural token sequence coordinates
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ActivationPayload) Reset() {
@@ -89,27 +86,6 @@ func (x *ActivationPayload) GetLayerIndex() uint32 {
 	return 0
 }
 
-func (x *ActivationPayload) GetGlobalMin() float32 {
-	if x != nil {
-		return x.GlobalMin
-	}
-	return 0
-}
-
-func (x *ActivationPayload) GetGlobalMax() float32 {
-	if x != nil {
-		return x.GlobalMax
-	}
-	return 0
-}
-
-func (x *ActivationPayload) GetScaleFactor() float32 {
-	if x != nil {
-		return x.ScaleFactor
-	}
-	return 0
-}
-
 func (x *ActivationPayload) GetQuantizedTensor() []byte {
 	if x != nil {
 		return x.QuantizedTensor
@@ -124,11 +100,33 @@ func (x *ActivationPayload) GetSparseBitmask() []byte {
 	return nil
 }
 
+func (x *ActivationPayload) GetTokenIds() []int64 {
+	if x != nil {
+		return x.TokenIds
+	}
+	return nil
+}
+
+func (x *ActivationPayload) GetCumulativeLogprob() float32 {
+	if x != nil {
+		return x.CumulativeLogprob
+	}
+	return 0
+}
+
+func (x *ActivationPayload) GetPositionIds() []int64 {
+	if x != nil {
+		return x.PositionIds
+	}
+	return nil
+}
+
 type StreamAck struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	ErrorMessage   string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	GeneratedToken string                 `protobuf:"bytes,3,opt,name=generated_token,json=generatedToken,proto3" json:"generated_token,omitempty"` // FIX: The network pipeline return lane for text delivery
+	GeneratedToken string                 `protobuf:"bytes,3,opt,name=generated_token,json=generatedToken,proto3" json:"generated_token,omitempty"`
+	StepLogprob    float32                `protobuf:"fixed32,4,opt,name=step_logprob,json=stepLogprob,proto3" json:"step_logprob,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -184,30 +182,36 @@ func (x *StreamAck) GetGeneratedToken() string {
 	return ""
 }
 
+func (x *StreamAck) GetStepLogprob() float32 {
+	if x != nil {
+		return x.StepLogprob
+	}
+	return 0
+}
+
 var File_data_plane_proto_activation_stream_proto protoreflect.FileDescriptor
 
 const file_data_plane_proto_activation_stream_proto_rawDesc = "" +
 	"\n" +
-	"(data-plane/proto/activation_stream.proto\x12\fdllm.network\"\xb6\x02\n" +
+	"(data-plane/proto/activation_stream.proto\x12\fdllm.network\"\xc4\x02\n" +
 	"\x11ActivationPayload\x12\x1f\n" +
 	"\vprompt_hash\x18\x01 \x01(\x04R\n" +
 	"promptHash\x12,\n" +
 	"\x12task_serial_number\x18\x02 \x01(\rR\x10taskSerialNumber\x12\x1f\n" +
 	"\vlayer_index\x18\x03 \x01(\rR\n" +
-	"layerIndex\x12\x1d\n" +
-	"\n" +
-	"global_min\x18\x04 \x01(\x02R\tglobalMin\x12\x1d\n" +
-	"\n" +
-	"global_max\x18\x05 \x01(\x02R\tglobalMax\x12!\n" +
-	"\fscale_factor\x18\x06 \x01(\x02R\vscaleFactor\x12)\n" +
-	"\x10quantized_tensor\x18\a \x01(\fR\x0fquantizedTensor\x12%\n" +
-	"\x0esparse_bitmask\x18\b \x01(\fR\rsparseBitmask\"s\n" +
+	"layerIndex\x12)\n" +
+	"\x10quantized_tensor\x18\x04 \x01(\fR\x0fquantizedTensor\x12%\n" +
+	"\x0esparse_bitmask\x18\x05 \x01(\fR\rsparseBitmask\x12\x1b\n" +
+	"\ttoken_ids\x18\x06 \x03(\x03R\btokenIds\x12-\n" +
+	"\x12cumulative_logprob\x18\a \x01(\x02R\x11cumulativeLogprob\x12!\n" +
+	"\fposition_ids\x18\b \x03(\x03R\vpositionIds\"\x96\x01\n" +
 	"\tStreamAck\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12'\n" +
-	"\x0fgenerated_token\x18\x03 \x01(\tR\x0egeneratedToken2f\n" +
+	"\x0fgenerated_token\x18\x03 \x01(\tR\x0egeneratedToken\x12!\n" +
+	"\fstep_logprob\x18\x04 \x01(\x02R\vstepLogprob2f\n" +
 	"\x10ActivationStream\x12R\n" +
-	"\x16StreamLayerActivations\x12\x1f.dllm.network.ActivationPayload\x1a\x17.dllm.network.StreamAckB\x1fZ\x1ddllm-cluster/data-plane/protob\x06proto3"
+	"\x16StreamLayerActivations\x12\x1f.dllm.network.ActivationPayload\x1a\x17.dllm.network.StreamAckB%Z#dllm-cluster/data-plane/proto;protob\x06proto3"
 
 var (
 	file_data_plane_proto_activation_stream_proto_rawDescOnce sync.Once

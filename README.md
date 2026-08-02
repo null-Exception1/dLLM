@@ -4,7 +4,7 @@
 
 An experimental, low-level LLM inference orchestration framework designed to implement asynchronous pipeline parallelism, block-wise INT8 quantization, and entropy-driven speculative branching across decentralized nodes. 
 
-## Architectural Post-Mortem & Core Failure Modes
+## architecture
 
 This repository remains public as an engineering post-mortem detailing the micro-architectural and network-level bottlenecks that occur when attempting dynamic, dynamic-routed tensor parallelism over virtualized network infrastructure (e.g., Google Colab / standard Ethernet topologies).
 
@@ -25,7 +25,3 @@ To maximize utilization, the framework used an entropy-driven router to predict 
 2. To run distributed consumer inference, optimization routines must be strictly restricted to the **inter-prompt idle space**. Live, token-level network dependency during the forward pass turns a parallel computing cluster back into an incredibly slow serial wire.
 3. Inference optimization on constrained hardware is entirely a memory bandwidth and context-caching management problem, not a macro-routing problem.
 
-## stack
-* Python / PyTorch Core Engine
-* Custom Block-Wise INT8 Quantization Kernels
-* Multi-Threaded Asynchronous Execution Queues

@@ -19,11 +19,6 @@ To maximize utilization, the framework used an entropy-driven router to predict 
 - Speculative execution requires a locked, predictable pipeline schedule to successfully mask data-transfer latency behind active compute streams. Introducing dynamic branching based on runtime entropy calculation meant nodes could not pre-allocate VRAM or pre-fetch data buffers.
 - The system introduced constant pipeline stalls and execution rollbacks. The synchronization overhead required to continuously validate speculative branches across nodes over a slow wire completely wiped out any performance gains achieved by distributing the workload.
 
-### Covariate Shift in Distant Latent Injections
-The framework explored offloading and capturing intermediate hidden layers to utilize secondary nodes as an out-of-band "subconscious" logical processing buffer.
-
-- Injecting a previously stored hidden state vector directly back into downstream layers of a subsequent prompt pass caused immediate **catastrophic logic collapse**. Because the transformer's hidden space distribution is deeply co-dependent on its precise positional tracking (RoPE) and immediate prior attention context, external latent injections introduced radical covariate shift, breaking the model's math without explicit, continuous alignment training/adapter layers.
-
 ## takeaways
 
 1. Pushing raw transformer intermediate states across physical network cables without dedicated data-center fabrics (e.g., 400Gbps InfiniBand, RoCEv2, NVLink) is a fundamental systems anti-pattern. 

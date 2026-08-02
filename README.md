@@ -14,7 +14,7 @@ The framework attempted to distribute execution by routing intermediate activati
 - For an execution hidden dimension ($d$) of 4096 using 16-bit floating-point tensors, a single token's hidden state payload is highly compact (~16 KB). However, when evaluating the full history ($N$) during deep reasoning sequences, the **KV-Cache** scales linearly. Pushing multi-megabyte/gigabyte attention matrices over standard TCP/IP sockets saturates network interface card (NIC) egress channels instantly.
 - GPU matrix multiplications (GEMM) occur on the scale of microseconds. Standard virtual networking introduces latency on the scale of milliseconds. The system inverted the compute-to-I/O ratio, causing the GPUs to spend **>95% of their clock cycles stalled** in idle execution bubbles waiting for network packets.
 
-### Entropy Driven Branching
+### entropy driven branching
 To maximize utilization, the framework used an entropy-driven router to predict difficulty and speculatively branch logical execution pathways across the cluster.
 - Speculative execution requires a locked, predictable pipeline schedule to successfully mask data-transfer latency behind active compute streams. Introducing dynamic branching based on runtime entropy calculation meant nodes could not pre-allocate VRAM or pre-fetch data buffers.
 - The system introduced constant pipeline stalls and execution rollbacks. The synchronization overhead required to continuously validate speculative branches across nodes over a slow wire completely wiped out any performance gains achieved by distributing the workload.

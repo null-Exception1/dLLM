@@ -15,8 +15,8 @@ the framework attempted to distribute execution by routing intermediate activati
 ### entropy driven branching
 
 to maximize utilization, the framework used an entropy-driven router to predict difficulty and speculatively branch logical execution pathways across the cluster.
-- speculative execution requires a locked, predictable pipeline schedule to successfully mask data-transfer latency behind active compute streams. Introducing dynamic branching based on runtime entropy calculation meant nodes could not pre-allocate VRAM or pre-fetch data buffers.
-- the system introduced constant pipeline stalls and execution rollbacks. The synchronization overhead required to continuously validate speculative branches across nodes over a slow wire completely wiped out any performance gains achieved by distributing the workload.
+- speculative execution requires a locked, predictable pipeline schedule to successfully mask data-transfer latency behind active compute streams. introducing dynamic branching based on runtime entropy calculation meant nodes could not pre-allocate VRAM or pre-fetch data buffers.
+- the system introduced constant pipeline stalls and execution rollbacks. the synchronization overhead required to continuously validate speculative branches across nodes over a slow wire completely wiped out any performance gains achieved by distributing the workload.
 
 ## takeaways
 
